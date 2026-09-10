@@ -41,6 +41,7 @@ Agente per l'analisi di video tramite AI. Espone un'API HTTP (Flask) con un unic
 - `FLASK_DEBUG`: abilita il debug mode (0 o 1).
 - `GEMINI_API_KEY` (o `GOOGLE_API_KEY`): chiave API di Gemini, richiesta per l'analisi video.
 - `GEMINI_MODEL`: modello Gemini da usare (default `gemini-3.8-flash`).
+- `MOCK_ANALYSIS`: se `1`, `/analyze-video` non chiama Gemini e restituisce un risultato fisso (utile per sviluppare il frontend senza consumare quota API).
 
 ## Installazione e avvio
 

@@ -4,12 +4,17 @@ import tempfile
 
 from dotenv import load_dotenv
 from flask import Flask, Response, request
+from flask_cors import CORS
 
 from service import analyze_video
 
 load_dotenv(override=True)
 
 app = Flask(__name__)
+
+# In dev il frontend (Vite, http://localhost:5173) gira su un'origine
+# diversa dal backend (http://localhost:8080): serve CORS sull'endpoint API.
+CORS(app, resources={r"/analyze-video": {"origins": os.getenv("CORS_ORIGINS", "*")}})
 
 
 def _json_response(payload: dict, status: int) -> Response:

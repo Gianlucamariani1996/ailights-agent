@@ -18,100 +18,39 @@ from google import genai
 from google.genai import types
 
 SYSTEM_PROMPT = """\
-Sei un montatore professionista di highlight sportivi per la televisione italiana.
-Ricevi una finestra temporale candidata di una partita, già corredata dai segnali
-estratti da tool esterni. Il tuo compito è decidere se quella finestra contiene un
-highlight, classificarlo e stabilirne i confini. Non descrivi la partita.
+Sei un montatore di highlight sportivi.
+Analizza questo video di calcio e restituisci ESCLUSIVAMENTE un array JSON.
 
-REGOLE GENERALI
+Sono highlight: gol, rigori, punizioni pericolose, pali, parate decisive,
+occasioni da gol non concretizzate.
+NON sono highlight: rimesse, falli a centrocampo, sostituzioni ordinarie.
+Se non trovi nessun highlight, restituisci [].
 
-- Rispondi ESCLUSIVAMENTE con JSON valido conforme allo schema fornito. Nessun testo
-  prima o dopo, nessun blocco markdown, nessun commento.
-- LINGUA: tutti i campi testuali — description, caption, why_selected, commentary —
-  sono ESCLUSIVAMENTE in italiano.
-- TIMESTAMP: formato HH:MM:SS.mmm, relativi all'inizio del video fornito. Fornisci il
-  valore più preciso consentito dai frame e dai segnali che hai ricevuto. Non dichiarare
-  una precisione che i dati non supportano: il raffinamento finale dei bordi avviene a
-  valle, lato codice.
-- SEGNALI MANCANTI: qualunque campo in ingresso può arrivare null. Decidi con quello che
-  hai e abbassa la confidence di conseguenza. Non inventare un dato assente.
-- TRASCRIZIONE: non trascrivere l'audio. Il transcript ti viene fornito. Il tuo compito è
-  ASSOCIARE all'evento la porzione di frase pertinente, non produrla.
-- SCOREBOARD: non leggere il punteggio dai frame. Usa score_before e score_after che ti
-  vengono forniti. Se sono null, il campo scoreboard in uscita è null.
-- SOGLIA: restituisci l'evento solo se confidence >= 0.40. Sotto quella soglia restituisci
-  is_highlight = false. Non riempire gli highlight di casi dubbi.
-- Non conosci i nomi delle squadre né dei giocatori: identifica le squadre dal colore
-  della maglia, e solo quando è inequivocabile.
-
-Valuta questa finestra candidata di una partita di TENNIS.
-
-COSA È UN HIGHLIGHT NEL TENNIS
-
-- ogni set point e match point, giocato o annullato: SEMPRE
-- break point, convertiti o salvati
-- scambi lunghi
-- colpi spettacolari: passanti, smorzate vincenti, recuperi difensivi, ace su punti
-  importanti
-- reazioni evidenti del giocatore o del pubblico
-- fine di ogni set
-
-FUORI PERIMETRO
-
-Punti ordinari senza scambio, doppi falli non decisivi, cambi campo, pause, asciugatura,
-discussioni con l'arbitro non rilevanti.
-
-NOTA SUI SEGNALI
-
-Nel tennis la telecronaca è molto meno continua che nel calcio: il transcript è più povero
-e va pesato meno. Danno più informazione la durata dello scambio, la reazione del pubblico
-e quella del giocatore. Usali come segnali primari.
-
-COME DECIDERE I CONFINI DELLA CLIP
-
-Nessun buffer fisso. start_proposed all'inizio dello scambio (tipicamente il servizio),
-end_proposed dopo la reazione, prima della preparazione del punto successivo.
-
-Valuta questa finestra candidata di una partita di CALCIO.
-
-COSA È UN HIGHLIGHT NEL CALCIO
-
-Non solo i gol. Conta tutto ciò che si avvicina alla porta, anche senza esito.
-
-- gol (da azione, su rigore, su punizione, autogol)
-- rigori e punizioni battute in zona pericolosa, indipendentemente dall'esito
-- tiri in porta parati in modo decisivo
-- pali e traverse
-- occasioni da gol non concretizzate (tiro a lato da posizione favorevole, errore
-  sotto porta, salvataggio sulla linea)
-- cartellini ROSSI e falli gravi
-- episodi arbitrali contestati
-
-FUORI PERIMETRO
-
-Rimesse laterali, falli a centrocampo, retropassaggi, possesso senza progressione,
-sostituzioni ordinarie, inquadrature di pubblico e panchina non legate a un'azione,
-pre-partita e intervallo.
-
-I cartellini GIALLI sono fuori perimetro per questa versione.
-
-COME DECIDERE I CONFINI DELLA CLIP
-
-Non usare buffer fissi. start_proposed coincide con l'inizio significativo dell'azione,
-cioè da dove l'azione comincia a costruirsi; end_proposed cade dopo la reazione naturale
-— esultanza, disperazione, ripresa del gioco. La durata è quella che serve all'azione,
-non un numero deciso a priori.
-
-REPLAY
-
-Se lo stesso momento viene rimostrato (moviola, rallenty), NON creare un evento separato
-e NON spostare l'anchor: l'anchor si riferisce SEMPRE all'azione dal vivo. Indica gli
-intervalli di replay nel campo dedicato.
+Schema di ogni evento:
+{"type": "...", "start": "mm:ss", "end": "mm:ss", "team": "...",
+"description": "...", "relevance": 0-100}
 """
 
 
-def analyze_video(video: str) -> dict[str, Any]:
-    """`video` può essere un path locale oppure un URL http(s)."""
+_MOCK_HIGHLIGHTS: list[dict[str, Any]] = [
+    {"type": "occasione da gol", "start": "08:12", "end": "08:24", "team": "Juventus", "description": "Contropiede rapido della Juventus: Vlahovic allarga per Cuadrado che calcia di potenza incrociando a fil di palo.", "relevance": 72},
+    {"type": "parata", "start": "11:52", "end": "12:06", "team": "Juventus", "description": "Azione corale della Juventus, velo di Vlahovic e conclusione mancina di prima intenzione di Milik, respinta da Tatarusanu.", "relevance": 75},
+    {"type": "occasione da gol", "start": "12:54", "end": "13:06", "team": "Juventus", "description": "Danilo approfitta dello spazio al limite dell'area e scaglia un violento diagonale destro che finisce di poco a lato.", "relevance": 70},
+    {"type": "palo", "start": "20:03", "end": "20:25", "team": "Milan", "description": "Sugli sviluppi di un calcio d'angolo di Tonali, colpo di tacco di Rafael Leão che si stampa direttamente sul palo a Szczesny battuto.", "relevance": 88},
+    {"type": "palo", "start": "33:55", "end": "34:15", "team": "Milan", "description": "Rafael Leão si accentra dalla sinistra e scocca una splendida conclusione da fuori area che colpisce in pieno la base del palo.", "relevance": 89},
+    {"type": "gol", "start": "45:33", "end": "46:10", "team": "Milan", "description": "Calcio d'angolo teso battuto da Theo Hernandez, conclusione al volo di Giroud controllata e girata in rete da distanza ravvicinata da Fikayo Tomori per l'1-0.", "relevance": 95},
+]
+
+
+def analyze_video(video: str) -> Any:
+    """`video` può essere un path locale oppure un URL http(s).
+
+    Se MOCK_ANALYSIS=1 è impostata, non chiama Gemini: restituisce un
+    risultato fisso, utile per sviluppare il frontend senza consumare
+    quota API o attendere l'elaborazione reale del video.
+    """
+    if os.environ.get("MOCK_ANALYSIS") == "1":
+        return _MOCK_HIGHLIGHTS
     return _call_gemini(video)
 
 
