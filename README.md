@@ -1,11 +1,12 @@
 # Ailights Agent
 
-Agente per l'analisi di video tramite AI. Espone un'API HTTP (Flask) con un unico endpoint `/analyze-video`.
+Agente per l'analisi di video tramite AI. Espone un'API HTTP (Flask) con due endpoint: `/analyze-video` e `/videos`.
 
 ## Cosa fa
 
-- Riceve l'URL di un video da analizzare.
-- Delega l'analisi a un servizio (`service.py`) che scarica il video, lo carica su Gemini e ne estrae riassunto, highlights e tag in formato JSON.
+- Riceve l'URL (o il file) di un video da analizzare.
+- Delega l'analisi a un servizio (`service.py`) che scarica il video, lo carica su Gemini e ne estrae gli highlight in formato JSON.
+- Ogni analisi viene salvata in un DB SQLite locale (`videos.db`, vedi `db.py`): id, titolo (derivato dalle squadre viste negli highlight) e il JSON del risultato. `GET /videos` espone lo storico per il frontend.
 
 ## API
 
@@ -26,13 +27,24 @@ Agente per l'analisi di video tramite AI. Espone un'API HTTP (Flask) con un unic
   **Risposta (200):**
   ```json
   {
-    "result": { ... }
+    "result": [ { "type": "gol", "start": "45:33", "end": "46:10", "team": "...", "description": "...", "relevance": 95 }, ... ],
+    "video_id": "080c2f5838fd4518a676298366866766",
+    "title": "Squadra A vs Squadra B"
   }
   ```
 
   **Risposta (400):** né `video_url` né un file `video` sono stati forniti.
 
   **Risposta (500):** errore durante l'analisi (es. chiave Gemini mancante o errore dell'API).
+
+- `GET /videos`: storico delle analisi salvate, più recenti prime.
+
+  **Risposta (200):**
+  ```json
+  [
+    { "id": "...", "title": "...", "created_at": "2026-09-10T16:24:56+00:00", "result": [ ... ] }
+  ]
+  ```
 
 ## Variabili d'ambiente
 
