@@ -26,6 +26,14 @@ decisive, occasioni da gol non concretizzate.
 NON sono highlight: rimesse, falli a centrocampo, sostituzioni ordinarie.
 Se non trovi nessun highlight, restituisci [].
 
+"start" ed "end" devono delimitare SOLO l'azione dal vivo: l'evento deve
+comparire una volta sola nella clip, non due. Se subito dopo l'azione va in
+onda un replay/rallenty/moviola dello stesso episodio, NON allungare "end"
+per includerlo: la clip finisce con la reazione naturale dal vivo
+(esultanza, ripresa del gioco), prima che parta il replay. Un evento tipico
+dura pochi secondi: se stai per superare i 30-40 secondi, probabilmente hai
+incluso un replay per errore.
+
 Il campo "type" deve usare ESATTAMENTE uno di questi valori, senza varianti
 né sinonimi: "gol", "rigore", "palo", "parata", "occasione da gol".
 
