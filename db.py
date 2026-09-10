@@ -63,6 +63,26 @@ def save_video(video_id: str, title: str, result: Any, video_url: str | None = N
         conn.close()
 
 
+def get_video(video_id: str) -> dict[str, Any] | None:
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT id, title, created_at, result, video_url FROM videos WHERE id = ?",
+            (video_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        return None
+    return {
+        "id": row["id"],
+        "title": row["title"],
+        "created_at": row["created_at"],
+        "result": json.loads(row["result"]),
+        "video_url": row["video_url"],
+    }
+
+
 def list_videos() -> list[dict[str, Any]]:
     conn = _connect()
     try:

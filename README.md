@@ -1,12 +1,13 @@
 # Ailights Agent
 
-Agente per l'analisi di video tramite AI. Espone un'API HTTP (Flask) con due endpoint: `/analyze-video` e `/videos`.
+Agente per l'analisi di video tramite AI. Espone un'API HTTP (Flask): `/analyze-video`, `/videos` e la generazione dell'highlight reel.
 
 ## Cosa fa
 
 - Riceve l'URL (o il file) di un video da analizzare.
 - Delega l'analisi a un servizio (`service.py`) che scarica il video, lo carica su Gemini e ne estrae gli highlight in formato JSON.
-- Ogni analisi viene salvata in un DB SQLite locale (`videos.db`, vedi `db.py`): id, titolo (derivato dalle squadre viste negli highlight) e il JSON del risultato. `GET /videos` espone lo storico per il frontend.
+- Ogni analisi viene salvata in un DB SQLite locale (`videos.db`, vedi `db.py`): id, titolo (derivato dalle squadre viste negli highlight), il JSON del risultato e un riferimento al video (path locale o URL remoto). `GET /videos` espone lo storico per il frontend.
+- Su richiesta (`POST /videos/<id>/reel`) ritaglia con **ffmpeg** ogni highlight dal video sorgente e li concatena in un unico mp4 (`reel.py`). Richiede `ffmpeg` nel `PATH` del server.
 
 ## API
 
@@ -42,9 +43,18 @@ Agente per l'analisi di video tramite AI. Espone un'API HTTP (Flask) con due end
   **Risposta (200):**
   ```json
   [
-    { "id": "...", "title": "...", "created_at": "2026-09-10T16:24:56+00:00", "result": [ ... ] }
+    { "id": "...", "title": "...", "created_at": "2026-09-10T16:24:56+00:00", "result": [ ... ], "video_url": "/uploads/....mp4" }
   ]
   ```
+
+- `POST /videos/<id>/reel`: genera (o riusa, se già presente) l'highlight reel per il video `<id>`: ritaglia ogni highlight dal video sorgente (`ffmpeg -ss/-t`) e li concatena (`ffmpeg -f concat`).
+
+  **Risposta (200):** `{ "reel_url": "/reels/<id>.mp4" }`
+  **Risposta (404):** id non trovato nel DB.
+  **Risposta (400):** il video non ha un riferimento sorgente utilizzabile.
+  **Risposta (500):** `ffmpeg` non installato, nessun highlight, o errore durante il taglio/concatenazione.
+
+- `GET /uploads/<file>` / `GET /reels/<file>`: servono rispettivamente i video caricati e i reel generati.
 
 ## Variabili d'ambiente
 

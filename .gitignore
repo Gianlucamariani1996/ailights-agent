@@ -3,4 +3,5 @@ __pycache__/
 *.pyc
 videos.db
 uploads/
+reels/
 .env

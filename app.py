@@ -10,6 +10,7 @@ from flask import Flask, Response, request, send_from_directory
 from flask_cors import CORS
 
 import db
+import reel
 from service import analyze_video
 
 load_dotenv(override=True)
@@ -23,7 +24,8 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 # In dev il frontend (Vite, http://localhost:5173) gira su un'origine
 # diversa dal backend (http://localhost:8080): serve CORS sugli endpoint API.
 CORS(app, resources={r"/analyze-video": {"origins": os.getenv("CORS_ORIGINS", "*")},
-                      r"/videos": {"origins": os.getenv("CORS_ORIGINS", "*")}})
+                      r"/videos": {"origins": os.getenv("CORS_ORIGINS", "*")},
+                      r"/videos/*": {"origins": os.getenv("CORS_ORIGINS", "*")}})
 
 
 def _json_response(payload: Any, status: int) -> Response:
@@ -106,6 +108,41 @@ def list_videos_endpoint() -> Response:
 @app.get("/uploads/<path:filename>")
 def uploaded_file(filename: str) -> Response:
     return send_from_directory(UPLOAD_DIR, filename)
+
+
+def _resolve_source(video_url: str | None) -> str | None:
+    """Un video_url che punta a /uploads/... va tradotto nel path locale
+    reale: ffmpeg ha bisogno del file, non della route Flask che lo serve.
+    Un URL esterno assoluto (analisi partita da video_url remoto) invece
+    va bene così com'è: ffmpeg legge anche sorgenti HTTP."""
+    if not video_url:
+        return None
+    if video_url.startswith("/uploads/"):
+        return os.path.join(UPLOAD_DIR, os.path.basename(video_url))
+    return video_url
+
+
+@app.post("/videos/<video_id>/reel")
+def generate_reel_endpoint(video_id: str) -> Response:
+    record = db.get_video(video_id)
+    if record is None:
+        return _json_response({"error": "Video non trovato."}, 404)
+
+    source = _resolve_source(record["video_url"])
+    if not source:
+        return _json_response({"error": "Nessun video sorgente disponibile per questo id."}, 400)
+
+    try:
+        output_path = reel.build_reel(video_id, source, record["result"])
+    except Exception as exc:
+        return _json_response({"error": str(exc)}, 500)
+
+    return _json_response({"reel_url": f"/reels/{os.path.basename(output_path)}"}, 200)
+
+
+@app.get("/reels/<path:filename>")
+def reel_file(filename: str) -> Response:
+    return send_from_directory(reel.REELS_DIR, filename)
 
 
 if __name__ == "__main__":
