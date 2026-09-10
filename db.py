@@ -1,7 +1,8 @@
 """Storage SQLite per i video analizzati (usato dallo storico).
 
-Salva id, titolo e il JSON grezzo restituito dall'analisi. Nessun file
-video viene persistito: solo i metadati e il risultato dell'analisi.
+Salva id, titolo, il JSON grezzo restituito dall'analisi e un riferimento
+al video (path locale servito da /uploads/... se caricato come file,
+oppure l'URL remoto originale se l'analisi è partita da un video_url).
 """
 from __future__ import annotations
 
@@ -33,17 +34,29 @@ def init_db() -> None:
             )
             """
         )
+        # Migrazione leggera: i DB creati prima dell'introduzione del
+        # riferimento al video non hanno questa colonna.
+        try:
+            conn.execute("ALTER TABLE videos ADD COLUMN video_url TEXT")
+        except sqlite3.OperationalError:
+            pass  # colonna già presente
         conn.commit()
     finally:
         conn.close()
 
 
-def save_video(video_id: str, title: str, result: Any) -> None:
+def save_video(video_id: str, title: str, result: Any, video_url: str | None = None) -> None:
     conn = _connect()
     try:
         conn.execute(
-            "INSERT INTO videos (id, title, created_at, result) VALUES (?, ?, ?, ?)",
-            (video_id, title, datetime.now(timezone.utc).isoformat(), json.dumps(result, ensure_ascii=False)),
+            "INSERT INTO videos (id, title, created_at, result, video_url) VALUES (?, ?, ?, ?, ?)",
+            (
+                video_id,
+                title,
+                datetime.now(timezone.utc).isoformat(),
+                json.dumps(result, ensure_ascii=False),
+                video_url,
+            ),
         )
         conn.commit()
     finally:
@@ -54,7 +67,7 @@ def list_videos() -> list[dict[str, Any]]:
     conn = _connect()
     try:
         rows = conn.execute(
-            "SELECT id, title, created_at, result FROM videos ORDER BY created_at DESC"
+            "SELECT id, title, created_at, result, video_url FROM videos ORDER BY created_at DESC"
         ).fetchall()
     finally:
         conn.close()
@@ -64,6 +77,7 @@ def list_videos() -> list[dict[str, Any]]:
             "title": row["title"],
             "created_at": row["created_at"],
             "result": json.loads(row["result"]),
+            "video_url": row["video_url"],
         }
         for row in rows
     ]

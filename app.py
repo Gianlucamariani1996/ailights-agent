@@ -1,11 +1,12 @@
 import json
 import os
+import shutil
 import tempfile
 import uuid
 from typing import Any
 
 from dotenv import load_dotenv
-from flask import Flask, Response, request
+from flask import Flask, Response, request, send_from_directory
 from flask_cors import CORS
 
 import db
@@ -15,6 +16,9 @@ load_dotenv(override=True)
 
 app = Flask(__name__)
 db.init_db()
+
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # In dev il frontend (Vite, http://localhost:5173) gira su un'origine
 # diversa dal backend (http://localhost:8080): serve CORS sugli endpoint API.
@@ -43,12 +47,11 @@ def _derive_title(highlights: list) -> str:
     return "Video analizzato"
 
 
-def _analyze_and_persist(video: str) -> dict:
-    result = analyze_video(video)
-    video_id = uuid.uuid4().hex
+def _persist(result: list, video_url: str | None = None, video_id: str | None = None) -> dict:
+    video_id = video_id or uuid.uuid4().hex
     title = _derive_title(result)
-    db.save_video(video_id, title, result)
-    return {"result": result, "video_id": video_id, "title": title}
+    db.save_video(video_id, title, result, video_url)
+    return {"result": result, "video_id": video_id, "title": title, "video_url": video_url}
 
 
 @app.post("/analyze-video")
@@ -61,7 +64,15 @@ def analyze_video_endpoint() -> Response:
         os.close(fd)
         video_file.save(tmp_path)
         try:
-            payload = _analyze_and_persist(tmp_path)
+            result = analyze_video(tmp_path)
+            # Solo dopo un'analisi riuscita copiamo il video in una cartella
+            # persistente (servita da /uploads/<file>), così lo storico può
+            # ripuntarci anche dopo un refresh: il file temporaneo va comunque
+            # rimosso a prescindere (vedi finally).
+            video_id = uuid.uuid4().hex
+            stored_name = f"{video_id}{suffix}"
+            shutil.copyfile(tmp_path, os.path.join(UPLOAD_DIR, stored_name))
+            payload = _persist(result, video_url=f"/uploads/{stored_name}", video_id=video_id)
             return _json_response(payload, 200)
         except Exception as exc:
             return _json_response({"error": str(exc)}, 500)
@@ -78,7 +89,10 @@ def analyze_video_endpoint() -> Response:
         return _json_response({"error": "video_url or a 'video' file upload is required"}, 400)
 
     try:
-        payload = _analyze_and_persist(video_url)
+        result = analyze_video(video_url)
+        # Qui il video vive già altrove: nessun file da copiare, basta
+        # riusare lo stesso video_url anche come riferimento persistito.
+        payload = _persist(result, video_url=video_url)
         return _json_response(payload, 200)
     except Exception as exc:
         return _json_response({"error": str(exc)}, 500)
@@ -87,6 +101,11 @@ def analyze_video_endpoint() -> Response:
 @app.get("/videos")
 def list_videos_endpoint() -> Response:
     return _json_response(db.list_videos(), 200)
+
+
+@app.get("/uploads/<path:filename>")
+def uploaded_file(filename: str) -> Response:
+    return send_from_directory(UPLOAD_DIR, filename)
 
 
 if __name__ == "__main__":
