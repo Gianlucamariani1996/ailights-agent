@@ -21,24 +21,69 @@ SYSTEM_PROMPT = """\
 Sei un montatore di highlight sportivi.
 Analizza questo video di calcio e restituisci ESCLUSIVAMENTE un array JSON.
 
-Sono highlight: gol, rigori, punizioni pericolose, pali, parate decisive,
-occasioni da gol non concretizzate.
+Sono highlight: gol, rigori e punizioni in zona pericolosa, pali, parate
+decisive, occasioni da gol non concretizzate.
 NON sono highlight: rimesse, falli a centrocampo, sostituzioni ordinarie.
 Se non trovi nessun highlight, restituisci [].
 
+Il campo "type" deve usare ESATTAMENTE uno di questi valori, senza varianti
+né sinonimi: "gol", "rigore", "palo", "parata", "occasione da gol".
+
 Schema di ogni evento:
-{"type": "...", "start": "mm:ss", "end": "mm:ss", "team": "...",
-"description": "...", "relevance": 0-100}
+{"type": "gol|rigore|palo|parata|occasione da gol", "start": "mm:ss",
+"end": "mm:ss", "team": "...", "description": "...", "relevance": 0-100}
 """
 
 
 _MOCK_HIGHLIGHTS: list[dict[str, Any]] = [
-    {"type": "occasione da gol", "start": "08:12", "end": "08:24", "team": "Juventus", "description": "Contropiede rapido della Juventus: Vlahovic allarga per Cuadrado che calcia di potenza incrociando a fil di palo.", "relevance": 72},
-    {"type": "parata", "start": "11:52", "end": "12:06", "team": "Juventus", "description": "Azione corale della Juventus, velo di Vlahovic e conclusione mancina di prima intenzione di Milik, respinta da Tatarusanu.", "relevance": 75},
-    {"type": "occasione da gol", "start": "12:54", "end": "13:06", "team": "Juventus", "description": "Danilo approfitta dello spazio al limite dell'area e scaglia un violento diagonale destro che finisce di poco a lato.", "relevance": 70},
-    {"type": "palo", "start": "20:03", "end": "20:25", "team": "Milan", "description": "Sugli sviluppi di un calcio d'angolo di Tonali, colpo di tacco di Rafael Leão che si stampa direttamente sul palo a Szczesny battuto.", "relevance": 88},
-    {"type": "palo", "start": "33:55", "end": "34:15", "team": "Milan", "description": "Rafael Leão si accentra dalla sinistra e scocca una splendida conclusione da fuori area che colpisce in pieno la base del palo.", "relevance": 89},
-    {"type": "gol", "start": "45:33", "end": "46:10", "team": "Milan", "description": "Calcio d'angolo teso battuto da Theo Hernandez, conclusione al volo di Giroud controllata e girata in rete da distanza ravvicinata da Fikayo Tomori per l'1-0.", "relevance": 95},
+  {
+    "type": "parata",
+    "start": "26:33",
+    "end": "26:47",
+    "team": "Roma",
+    "description": "Džeko semina il panico nell'area della Lazio e calcia a botta sicura verso l'angolino, ma Strakosha si distende e compie una grande parata.",
+    "relevance": 80
+  },
+  {
+    "type": "parata",
+    "start": "28:04",
+    "end": "28:17",
+    "team": "Roma",
+    "description": "Pastore si inserisce in area e conclude con un diagonale mancino ravvicinato, Strakosha respinge d'istinto con i piedi.",
+    "relevance": 80
+  },
+  {
+    "type": "parata",
+    "start": "28:50",
+    "end": "29:05",
+    "team": "Lazio",
+    "description": "Immobile controlla e si gira in un fazzoletto calciando con potenza verso la porta, Olsen vola a deviare sopra la traversa.",
+    "relevance": 85
+  },
+  {
+    "type": "occasione",
+    "start": "29:45",
+    "end": "30:15",
+    "team": "Roma",
+    "description": "Ripartenza fulminea della Roma: Džeko allarga per Florenzi, fermato solo da un provvidenziale recupero in scivolata di Luiz Felipe.",
+    "relevance": 75
+  },
+  {
+    "type": "occasione",
+    "start": "31:07",
+    "end": "31:30",
+    "team": "Roma",
+    "description": "Calcio d'angolo battuto sul primo palo, spizzata di testa di Nzonzi che attraversa lo specchio della porta ma De Rossi non ci arriva per un soffio.",
+    "relevance": 80
+  },
+  {
+    "type": "gol",
+    "start": "48:18",
+    "end": "49:15",
+    "team": "Roma",
+    "description": "Pasticcio difensivo della retroguardia laziale a seguito di un duello aereo di Džeko: sul pallone vagante si avventa Lorenzo Pellegrini che sblocca il derby con un colpo di tacco magistrale.",
+    "relevance": 98
+  }
 ]
 
 
